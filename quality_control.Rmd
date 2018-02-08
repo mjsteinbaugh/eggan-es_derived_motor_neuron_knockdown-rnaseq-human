@@ -1,0 +1,278 @@
+---
+title: "Quality Control"
+author: "`r getOption('author')`"
+date: "`r Sys.Date()`"
+bibliography: bibliography.bib
+params:
+    bcbFile: "data/2018-02-02/bcb.rda"
+    outputDir: "."
+---
+
+```{r setup, message=FALSE}
+# Last modified 2017-12-14
+library(bcbioRNASeq)
+
+# Shared R Markdown settings
+prepareRNASeqTemplate()
+if (file.exists("setup.R")) {
+    source("setup.R")
+}
+
+# Load bcbioRNASeq object
+bcbName <- load(params$bcbFile)
+bcb <- get(bcbName, inherits = FALSE)
+
+# Directory paths
+dataDir <- file.path(params$outputDir, "data", Sys.Date())
+countsDir <- file.path(params$outputDir, "results", Sys.Date(), "counts")
+invisible(mapply(
+    FUN = dir.create,
+    list(dataDir, countsDir),
+    MoreArgs = list(recursive = TRUE, showWarnings = FALSE)
+))
+```
+
+```{r header, child="_header.Rmd", eval=file.exists("_header.Rmd")}
+```
+
+
+
+```{r sample_metadata}
+sampleMetadata(bcb)
+```
+
+[bcbio][] run data was imported from **`r metadata(bcb)$uploadDir`**.
+
+
+
+# Count matrices
+
+We aligned the reads using the GRCh37/hg19 genome annotations from [Ensembl][].
+
+```{r counts}
+rawCounts <- counts(bcb, normalized = FALSE)
+normalizedCounts <- counts(bcb, normalized = TRUE)
+tpm <- counts(bcb, normalized = "tpm")
+saveData(rawCounts, normalizedCounts, tpm, dir = dataDir)
+writeCounts(rawCounts, normalizedCounts, tpm, dir = countsDir)
+```
+
+
+## File downloads
+
+[Results directory on Dropbox](https://www.dropbox.com/sh/swr798c19iriesy/AACiitkyfs1CwojgSjedAntda?dl=0).
+
+- [`normalizedCounts.csv.gz`](https://www.dropbox.com/s/r8grh208rjvqzyr/normalizedCounts.csv.gz?dl=0): Use to evaluate individual genes and/or generate plots. These counts are normalized for the variation in sequencing depth across samples.
+- [`tpm.csv.gz`](https://www.dropbox.com/s/mftgow5gbqnj9fa/rawCounts.csv.gz?dl=0): Transcripts per million, scaled by length and also suitable for plotting.
+- [`rawCounts.csv.gz`](https://www.dropbox.com/s/q6u3zhvz8apb7qr/tpm.csv.gz?dl=0): Only use to perform a new differential expression analysis. These counts will vary across samples due to differences in sequencing depth, and have not been normalized. Do not use this file for plotting genes.
+
+
+
+# Read metrics {.tabset}
+
+**We're seeing strong batch effects based on sample date and replicate number.**
+
+I've tabbed corresponding plots that demonstrate the batch effects by `date` and `replicate` below.
+
+
+## Total reads {.tabset}
+
+```{r plot_total_reads}
+mdHeader("date", level = 3)
+plotTotalReads(bcb, interestingGroups = "date")
+
+mdHeader("replicate", level = 3)
+plotTotalReads(bcb, interestingGroups = "replicate")
+```
+
+
+## Mapped reads {.tabset}
+
+The number of mapped reads should correspond to the number of total reads.
+
+```{r plot_mapped_reads}
+mdHeader("date", level = 3)
+plotMappedReads(bcb, interestingGroups = "date")
+
+mdHeader("replicate", level = 3)
+plotMappedReads(bcb, interestingGroups = "replicate")
+```
+
+
+## Mapping rate
+
+The genomic mapping rate represents the percentage of reads mapping to the reference genome. Low mapping rates are indicative of sample contamination, poor sequencing quality or other artifacts.
+
+```{r plot_mapping_rate}
+plotMappingRate(bcb)
+```
+
+
+## Number of genes detected {.tabset}
+
+```{r plot_genes_detected}
+mdHeader("date", level = 3)
+plotGenesDetected(bcb, interestingGroups = "date")
+
+mdHeader("replicate", level = 3)
+plotGenesDetected(bcb, interestingGroups = "replicate")
+```
+
+
+## Gene detection saturation {.tabset}
+
+We should observe a linear trend in the number of genes detected with the number of mapped reads, which indicates that the sample input was not overloaded.
+
+```{r plot_gene_saturation}
+mdHeader("date", level = 3)
+plotGeneSaturation(bcb, interestingGroups = "date")
+
+mdHeader("replicate", level = 3)
+plotGeneSaturation(bcb, interestingGroups = "replicate")
+
+mdHeader("sampleName", level = 3)
+plotGeneSaturation(bcb, interestingGroups = "sampleName")
+```
+
+
+## Exonic mapping rate {.tabset}
+
+Ideally, at least 60% of total reads should map to exons.
+
+```{r plot_exonic_mapping_rate}
+mdHeader("date", level = 3)
+plotExonicMappingRate(bcb, interestingGroups = "date")
+
+mdHeader("replicate", level = 3)
+plotExonicMappingRate(bcb, interestingGroups = "replicate")
+```
+
+
+## Intronic mapping rate {.tabset}
+
+The majority of reads should map to exons and not introns.
+
+```{r plot_intronic_mapping_rate}
+mdHeader("date", level = 3)
+plotIntronicMappingRate(bcb, interestingGroups = "date")
+
+mdHeader("replicate", level = 3)
+plotIntronicMappingRate(bcb, interestingGroups = "replicate")
+```
+
+
+## rRNA mapping rate
+
+Samples should have a ribosomal RNA (rRNA) contamination rate below 10%.
+
+```{r plot_rrna_mapping_rate}
+plotRRNAMappingRate(bcb)
+```
+
+
+## 5'->3' bias
+
+```{r plot_53_bias}
+plot53Bias(bcb)
+```
+
+
+## Counts per gene {.tabset}
+
+Generally, we expect similar count spreads for all genes between samples unless the library sizes or total RNA expression are different. The log10 TMM-normalized counts per gene normalization method [@Robinson:2010dd] equates the overall expression levels of genes between samples under the assumption that the majority of them are not differentially expressed. Therefore, by normalizing for total RNA expression by sample, we expect the spread of the log10 TMM-normalized counts per gene to be similar for every sample.
+
+```{r plot_counts_per_gene}
+mdHeader("date", level = 3)
+plotCountsPerGene(bcb, interestingGroups = "date")
+
+mdHeader("replicate", level = 3)
+plotCountsPerGene(bcb, interestingGroups = "replicate")
+```
+
+
+## Count density {.tabset}
+
+Generally, we expect similar count spreads for all genes between samples unless the total expressed RNA per sample is different.
+
+```{r plot_count_density}
+mdHeader("date", level = 3)
+plotCountDensity(bcb, interestingGroups = "date")
+
+mdHeader("replicate", level = 3)
+plotCountDensity(bcb, interestingGroups = "replicate")
+```
+
+
+
+# Fit modeling
+
+Several quality metrics are first assessed to explore the fit of the model, before differential expression analysis is performed.
+
+
+## Variance stabilization
+
+The plots below show the standard deviation of normalized counts (`normalized_counts`) using `log2()`, `rlog()`, and variance stabilizing (`vst()`) transformations by `rank(mean)`. The transformations greatly reduce the standard deviation, with `rlog()` stabilizing the variance best across the mean.
+
+```{r plot_mean_sd, fig.height=18, fig.width=6}
+plotMeanSD(bcb, orientation = "vertical")
+```
+
+
+## Dispersion
+
+The following plot shows the dispersion by mean of normalized counts. We expect the dispersion to decrease as the mean of normalized counts increases.
+
+```{r plot_disp_ests}
+plotDispEsts(bcb)
+```
+
+
+
+# Sample similarity analysis
+
+Before performing similarity analysis, we transform counts to log2, which acts to minimize large differences in sequencing depth and helps normalize all samples to a similar dynamic range. For RNA-seq count data, variance increases with the mean. Logarithmic transformation of normalized count values with a small pseudocount will account for large variations seen between the highest expressing genes so that these genes won't dominate the PCA plots. However, due to the strong noise among low count values due to Poisson, the general log2 transformation will amplify this noise, and instead, low count genes will now dominate the PCA plots. So instead, we use a transformation (`rlog()`) that gives similar results for high counts as a log2 transformation but also shrinks the values of low counts towards the genes’ average across samples. We do this with the `rlog()` function in the [DESeq2][] package [@DESeq2], which we will later use for differential gene expression analysis.
+
+
+## Principal component analysis (PCA) {.tabset}
+
+PCA [@Jolliffe:2002wx] is a multivariate technique that allows us to summarize the systematic patterns of variations in the data. PCA takes the expression levels for genes and transforms it in principal component space, reducing each sample into one point. Thereby, we can separate samples by expression variation, and identify potential sample outliers. The PCA plot is a way to look at how samples are clustering.
+
+**We're seeing a very large batch effect due to the date of sample preparation.** As you can see, the samples are not clustering tightly by treatment, but instead are clustering by the date. We need to attempt to regress this effect out from our model for differential expression analysis. This may be difficult because we're seeing such a large batch effect here.
+
+```{r plot_pca}
+mdHeader("date", level = 3)
+plotPCA(bcb, interestingGroups = "date")
+
+mdHeader("replicate", level = 3)
+plotPCA(bcb, interestingGroups = "replicate")
+
+mdHeader("treatment (labeled)", level = 3)
+plotPCA(bcb, interestingGroups = c("category", "treatment"), label = TRUE)
+```
+
+
+## Covariates correlation with PCs
+
+When multiple factors may influence the results of a given experiment, it is useful to assess which of them is responsible for the most variance as determined by PCA. We adapted the method described by Daily et al. where they integrated a method to correlate covariates with principal components values to determine the importance of each factor.
+
+Here we are showing the correlational analysis of the rlog transformed count data's principal components with the metadata covariates of interest. Significant correlations (FDR < 0.1) are shaded from blue (anti-correlated) to orange (correlated), with non-significant correlations shaded in gray.
+
+```{r plot_pca_covariates}
+plotPCACovariates(bcb)
+```
+
+
+## Hierarchical clustering
+
+Inter-correlation analysis (ICA) is another way to look at how well samples cluster by plotting the correlation between the expression profiles of the samples.
+
+**Like the PCA, it's obvious here that the samples are clustering primarily by date**, and then by category.
+
+```{r plot_correlation_heatmap}
+plotCorrelationHeatmap(bcb, interestingGroups = c("date", "replicate", "category", "treatment"))
+```
+
+
+
+```{r footer, child="_footer.Rmd", eval=file.exists("_footer.Rmd")}
+```

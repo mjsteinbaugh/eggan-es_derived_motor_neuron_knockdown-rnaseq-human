@@ -1,0 +1,10 @@
+# Template for H. sapiens RNA-seq using Illumina prepared samples
+---
+details:
+  - analysis: RNA-seq
+    genome_build: hg19
+    algorithm:
+      aligner: star
+      strandedness: unstranded
+upload:
+  dir: ../final

@@ -1,0 +1,215 @@
+---
+title: "Differential Expression"
+author: "`r getOption('author')`"
+date: "`r Sys.Date()`"
+bibliography: bibliography.bib
+params:
+    bcbFile: "data/2018-02-02/bcb.rda"
+    design: !r formula(~date + category)
+    contrast: !r c("category", "ALS", "control")
+    alpha: 0.01
+    lfc: 0
+    outputDir: "."
+    dropboxDir: "HBC Team Folder (1)/Consults/kevin_eggan/es_derived_motor_neuron_knockdown"
+---
+
+```{r setup, message=FALSE}
+# Last modified 2018-02-05
+library(bcbioRNASeq)
+
+# Shared R Markdown settings
+prepareRNASeqTemplate()
+if (file.exists("setup.R")) {
+    source("setup.R")
+}
+
+# Directory paths
+dataDir <- file.path(params$outputDir, "data", Sys.Date())
+deDir <- file.path(params$outputDir, "results", "differential_expression")
+invisible(mapply(
+    FUN = dir.create,
+    list(dataDir, deDir),
+    MoreArgs = list(recursive = TRUE, showWarnings = FALSE)
+))
+
+# Dropbox paths
+dropboxDEDir <- file.path(params$dropboxDir, "results", "differential_expression")
+
+# Load bcbioRNASeq object
+bcbName <- load(params$bcbFile)
+bcb <- get(bcbName, inherits = FALSE)
+```
+
+```{r header, child="_header.Rmd", eval=file.exists("_header.Rmd")}
+```
+
+
+
+```{r dds, results="hide"}
+dds <- bcbio(bcb, "DESeqDataSet")
+dim(dds)
+# [1] 56969    18
+
+# Drop the `NoTx_*` samples from the analysis
+keepSamples <- colnames(dds)[which(!is.na(dds$treatment))]
+keepSamples
+#  [1] "siRED_1"   "siRED_2"   "siRED_3"   "siScr_1"   "siScr_2"   "siScr_3"   "siScr_4"   "siScr_5"   "siScr_6"  
+# [10] "siTDP43_1" "siTDP43_2" "siTDP43_3" "siTDP43_4" "siTDP43_5" "siTDP43_6"
+
+dds <- selectSamples(dds, sampleID = keepSamples)
+dim(dds)
+# [1] 56969    15
+
+# Now set the design formula and run DESeq
+design(dds) <- params$design
+dds <- DESeq(dds)
+normalizedCounts <- counts(dds, normalized = TRUE)
+rld <- rlog(dds)
+saveData(dds, normalizedCounts, rld, dir = dataDir)
+```
+
+
+
+# Alpha level (FDR) cutoffs
+
+Let's take a look at the number of genes we get with different false discovery rate (FDR) cutoffs. These tests subset *P* values that have been multiple test corrected using the Benjamini Hochberg (BH) method [@Benjamini:1995ws].
+
+```{r alpha_summary, results="asis"}
+alphaSummary(dds)
+```
+
+
+
+# Results
+
+```{r res}
+# help("results", "DESeq2")
+# For contrast argument as character vector:
+#   1. Design matrix factor of interest.
+#   2. Numerator for LFC (expt).
+#   3. Denominator for LFC (control).
+resUnshrunken <- results(
+    dds,
+    contrast = params$contrast,
+    alpha = params$alpha)
+
+# DESeqResults with shrunken log2 fold changes (LFC)
+# help("lfcShrink", "DESeq2")
+resShrunken <- lfcShrink(
+    dds = dds,
+    contrast = params$contrast,
+    res = resUnshrunken)
+
+# Use shrunken LFC values by default
+res <- resShrunken
+saveData(res, dir = dataDir)
+```
+
+We performed the analysis using a BH adjusted *P* value cutoff of `r params$alpha` and a log fold-change (LFC) ratio cutoff of `r params$lfc`.
+
+
+
+# Plots
+
+## Mean average (MA) {.tabset}
+
+An MA plot compares transformed counts on `M` (log ratio) and `A` (mean average) scales [@Yang:2002ty].
+
+```{r plot_ma}
+mdHeader("shrunken", level = 3)
+plotMA(resShrunken)
+
+mdHeader("unshrunken", level = 3)
+plotMA(resUnshrunken)
+```
+
+
+## Volcano {.tabset}
+
+A volcano plot compares significance (BH-adjusted *P* value) against fold change (log2) [@Cui:2003kh; @Li:2014fv]. Genes in the green box with text labels have an adjusted *P* value are likely to be the top candidate genes of interest.
+
+```{r plot_volcano}
+mdHeader("labeled", level = 3)
+plotVolcano(
+    res,
+    lfc = params$lfc,
+    gene2symbol = gene2symbol(bcb),
+    ntop = 30,
+    histograms = FALSE)
+```
+
+```{r plot_volcano_additional}
+mdHeader("shrunken", level = 3)
+plotVolcano(resShrunken, padj = TRUE)
+
+mdHeader("shrunken/unadjusted", level = 3)
+plotVolcano(resShrunken, padj = FALSE)
+
+mdHeader("unshrunken", level = 3)
+plotVolcano(resUnshrunken, padj = TRUE)
+
+mdHeader("unshrunken/unadjusted", level = 3)
+plotVolcano(resUnshrunken, padj = FALSE)
+```
+
+
+## Heatmap
+
+This plot shows only differentially expressed genes on a per-sample basis. We have scaled the data by row and used the `ward.D2` method for clustering [@WardJr:1963eu].
+
+```{r plot_deg_heatmap}
+annotationCol <- colData(dds) %>%
+    .[, c("category", "treatment", "date"), drop = FALSE] %>%
+    as.data.frame()
+plotDEGHeatmap(
+    res,
+    counts = rld,
+    gene2symbol = gene2symbol(bcb),
+    annotationCol = annotationCol)
+```
+
+
+
+# Results tables
+
+[Results directory on Dropbox](https://www.dropbox.com/sh/swr798c19iriesy/AACiitkyfs1CwojgSjedAntda?dl=0).
+
+```{r results_tables, results="asis"}
+resTbl <- resultsTables(
+    res,
+    lfc = params$lfc,
+    annotable = annotable(bcb),
+    summary = TRUE,
+    headerLevel = 2,
+    write = TRUE,
+    dir = deDir,
+    dropboxDir = dropboxDEDir)
+saveData(resTbl, dir = dataDir)
+```
+
+DEG tables are sorted by BH-adjusted P value, and contain the following columns:
+
+- `ensgene`: [Ensembl][] gene identifier.
+- `baseMean`: Mean of the normalized counts per gene for all samples.
+- `log2FoldChange`: log2 fold change.
+- `lfcSE`: log2 standard error.
+- `stat`: Wald statistic.
+- `pvalue`: Walt test *P* value.
+- `padj`: BH adjusted Wald test *P* value (corrected for multiple comparisons; aka FDR).
+- `externalGeneName`: [Ensembl][] name (a.k.a. symbol).
+- `description`: [Ensembl][] description.
+- `geneBiotype`: [Ensembl][] biotype (e.g. `protein_coding`).
+
+
+## Top tables
+
+Only the top up- and down-regulated genes (arranged by log2 fold change) are shown.
+
+```{r top_tables, results="asis"}
+topTables(resTbl)
+```
+
+
+
+```{r footer, child="_footer.Rmd", eval=file.exists("_footer.Rmd")}
+```
