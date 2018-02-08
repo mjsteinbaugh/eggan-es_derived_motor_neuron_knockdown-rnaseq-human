@@ -14,7 +14,7 @@ params:
 ---
 
 ```{r setup, message=FALSE}
-# Last modified 2018-02-05
+# Last modified 2018-02-08
 library(bcbioRNASeq)
 
 # Shared R Markdown settings
@@ -25,15 +25,22 @@ if (file.exists("setup.R")) {
 
 # Directory paths
 dataDir <- file.path(params$outputDir, "data", Sys.Date())
-deDir <- file.path(params$outputDir, "results", "differential_expression")
+resultsDir <- file.path(params$outputDir, "results", "differential_expression")
 invisible(mapply(
     FUN = dir.create,
-    list(dataDir, deDir),
+    list(dataDir, resultsDir),
     MoreArgs = list(recursive = TRUE, showWarnings = FALSE)
 ))
 
 # Dropbox paths
-dropboxDEDir <- file.path(params$dropboxDir, "results", "differential_expression")
+if (is.character(params$dropboxDir)) {
+    # Delete `.httr-oauth` if you have trouble writing to Dropbox
+    rdrop2::drop_auth()
+    dropboxDir <- file.path(
+        params$dropboxDir,
+        "results",
+        "differential_expression")
+}
 
 # Load bcbioRNASeq object
 bcbName <- load(params$bcbFile)
@@ -102,7 +109,7 @@ resShrunken <- lfcShrink(
 
 # Use shrunken LFC values by default
 res <- resShrunken
-saveData(res, dir = dataDir)
+saveData(res, resShrunken, resUnshrunken, dir = dataDir)
 ```
 
 We performed the analysis using a BH adjusted *P* value cutoff of `r params$alpha` and a log fold-change (LFC) ratio cutoff of `r params$lfc`.
@@ -134,7 +141,7 @@ plotVolcano(
     res,
     lfc = params$lfc,
     gene2symbol = gene2symbol(bcb),
-    ntop = 30,
+    ntop = 20,
     histograms = FALSE)
 ```
 
@@ -142,13 +149,13 @@ plotVolcano(
 mdHeader("shrunken", level = 3)
 plotVolcano(resShrunken, padj = TRUE)
 
-mdHeader("shrunken/unadjusted", level = 3)
+mdHeader("shrunken:unadjusted", level = 3)
 plotVolcano(resShrunken, padj = FALSE)
 
 mdHeader("unshrunken", level = 3)
 plotVolcano(resUnshrunken, padj = TRUE)
 
-mdHeader("unshrunken/unadjusted", level = 3)
+mdHeader("unshrunken:unadjusted", level = 3)
 plotVolcano(resUnshrunken, padj = FALSE)
 ```
 
@@ -169,6 +176,24 @@ plotDEGHeatmap(
 ```
 
 
+# PCA plot {.tabset}
+
+```{r plot_deg_pca}
+mdHeader("category", level = 2)
+plotDEGenePCA(
+    res,
+    counts = rld,
+    interestingGroups = "category")
+
+mdHeader("category:date", level = 2)
+plotDEGenePCA(
+    res,
+    counts = rld,
+    interestingGroups = c("category", "date"),
+    label = TRUE)
+```
+
+
 
 # Results tables
 
@@ -182,8 +207,9 @@ resTbl <- resultsTables(
     summary = TRUE,
     headerLevel = 2,
     write = TRUE,
-    dir = deDir,
-    dropboxDir = dropboxDEDir)
+    dir = resultsDir,
+    dropboxDir = dropboxDir)
+dir(resultsDir)
 saveData(resTbl, dir = dataDir)
 ```
 

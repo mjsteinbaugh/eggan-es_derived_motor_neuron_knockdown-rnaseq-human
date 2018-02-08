@@ -24,10 +24,10 @@ bcb <- get(bcbName, inherits = FALSE)
 
 # Directory paths
 dataDir <- file.path(params$outputDir, "data", Sys.Date())
-countsDir <- file.path(params$outputDir, "results", Sys.Date(), "counts")
+resultsDir <- file.path(params$outputDir, "results", "counts")
 invisible(mapply(
     FUN = dir.create,
-    list(dataDir, countsDir),
+    list(dataDir, resultsDir),
     MoreArgs = list(recursive = TRUE, showWarnings = FALSE)
 ))
 ```
@@ -54,7 +54,7 @@ rawCounts <- counts(bcb, normalized = FALSE)
 normalizedCounts <- counts(bcb, normalized = TRUE)
 tpm <- counts(bcb, normalized = "tpm")
 saveData(rawCounts, normalizedCounts, tpm, dir = dataDir)
-writeCounts(rawCounts, normalizedCounts, tpm, dir = countsDir)
+writeCounts(rawCounts, normalizedCounts, tpm, dir = resultsDir)
 ```
 
 
