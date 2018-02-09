@@ -9,18 +9,9 @@ params:
 ---
 
 ```{r setup, message=FALSE}
-# Last modified 2017-12-14
-library(bcbioRNASeq)
-
-# Shared R Markdown settings
-prepareRNASeqTemplate()
-if (file.exists("setup.R")) {
-    source("setup.R")
-}
-
-# Load bcbioRNASeq object
-bcbName <- load(params$bcbFile)
-bcb <- get(bcbName, inherits = FALSE)
+# Last modified 2018-02-08
+bcbioRNASeq::prepareRNASeqTemplate()
+source("setup.R")
 
 # Directory paths
 dataDir <- file.path(params$outputDir, "data", Sys.Date())
@@ -30,9 +21,13 @@ invisible(mapply(
     list(dataDir, resultsDir),
     MoreArgs = list(recursive = TRUE, showWarnings = FALSE)
 ))
+
+# Load bcbioRNASeq object
+bcbName <- load(params$bcbFile)
+bcb <- get(bcbName, inherits = FALSE)
 ```
 
-```{r header, child="_header.Rmd", eval=file.exists("_header.Rmd")}
+```{r header, child="_header.Rmd"}
 ```
 
 
@@ -274,5 +269,5 @@ plotCorrelationHeatmap(bcb, interestingGroups = c("date", "replicate", "category
 
 
 
-```{r footer, child="_footer.Rmd", eval=file.exists("_footer.Rmd")}
+```{r footer, child="_footer.Rmd"}
 ```

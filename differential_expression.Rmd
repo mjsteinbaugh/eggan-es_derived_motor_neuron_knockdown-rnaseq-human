@@ -7,21 +7,16 @@ params:
     bcbFile: "data/2018-02-02/bcb.rda"
     design: !r formula(~date + category)
     contrast: !r c("category", "ALS", "control")
-    alpha: 0.01
+    alpha: 0.05
     lfc: 0
     outputDir: "."
-    dropboxDir: "HBC Team Folder (1)/Consults/kevin_eggan/es_derived_motor_neuron_knockdown"
+    dropboxDir: "Consults/eggan-es_derived_motor_neuron_knockdown-rnaseq-human"
 ---
 
 ```{r setup, message=FALSE}
 # Last modified 2018-02-08
-library(bcbioRNASeq)
-
-# Shared R Markdown settings
-prepareRNASeqTemplate()
-if (file.exists("setup.R")) {
-    source("setup.R")
-}
+bcbioRNASeq::prepareRNASeqTemplate()
+source("setup.R")
 
 # Directory paths
 dataDir <- file.path(params$outputDir, "data", Sys.Date())
@@ -35,7 +30,6 @@ invisible(mapply(
 # Dropbox paths
 if (is.character(params$dropboxDir)) {
     # Delete `.httr-oauth` if you have trouble writing to Dropbox
-    rdrop2::drop_auth()
     dropboxDir <- file.path(
         params$dropboxDir,
         "results",
@@ -47,31 +41,35 @@ bcbName <- load(params$bcbFile)
 bcb <- get(bcbName, inherits = FALSE)
 ```
 
-```{r header, child="_header.Rmd", eval=file.exists("_header.Rmd")}
+```{r header, child="_header.Rmd"}
 ```
 
 
 
+For the differential expression analysis, we used [DESeq2][] `r packageVersion("DESeq2")`. We employed a design formula (`r params$design`) that accounts for the date batch effect. For more information on design formulas in [DESeq2][], run `help("design", "DESeq2")` in [R][].
+
+Here we're discarding the NoTx samples from the analysis. Note that since these 3 samples have been dropped, the values of the normalized counts will change, since we're now only looking at 15 samples. I've uploaded these updated counts into the `results/` directory.
+
 ```{r dds, results="hide"}
 dds <- bcbio(bcb, "DESeqDataSet")
 dim(dds)
-# [1] 56969    18
 
 # Drop the `NoTx_*` samples from the analysis
 keepSamples <- colnames(dds)[which(!is.na(dds$treatment))]
 keepSamples
-#  [1] "siRED_1"   "siRED_2"   "siRED_3"   "siScr_1"   "siScr_2"   "siScr_3"   "siScr_4"   "siScr_5"   "siScr_6"  
-# [10] "siTDP43_1" "siTDP43_2" "siTDP43_3" "siTDP43_4" "siTDP43_5" "siTDP43_6"
 
 dds <- selectSamples(dds, sampleID = keepSamples)
 dim(dds)
-# [1] 56969    15
 
 # Now set the design formula and run DESeq
 design(dds) <- params$design
 dds <- DESeq(dds)
-normalizedCounts <- counts(dds, normalized = TRUE)
 rld <- rlog(dds)
+
+# Rewrite the normalized counts
+normalizedCounts <- counts(dds, normalized = TRUE)
+writeCounts(normalizedCounts, dir = file.path("results", "counts"))
+
 saveData(dds, normalizedCounts, rld, dir = dataDir)
 ```
 
@@ -197,8 +195,6 @@ plotDEGenePCA(
 
 # Results tables
 
-[Results directory on Dropbox](https://www.dropbox.com/sh/swr798c19iriesy/AACiitkyfs1CwojgSjedAntda?dl=0).
-
 ```{r results_tables, results="asis"}
 resTbl <- resultsTables(
     res,
@@ -209,7 +205,6 @@ resTbl <- resultsTables(
     write = TRUE,
     dir = resultsDir,
     dropboxDir = dropboxDir)
-dir(resultsDir)
 saveData(resTbl, dir = dataDir)
 ```
 
@@ -237,5 +232,22 @@ topTables(resTbl)
 
 
 
-```{r footer, child="_footer.Rmd", eval=file.exists("_footer.Rmd")}
+# Gene plots
+
+```{r deg_plot}
+# These plots are sorted by gene ID and show DEGs in both directions
+degPlot(dds, res = res, n = 9, xs = "category")
+```
+
+```{r plot_gene}
+plotGene(
+    bcb,
+    genes = resTbl$degLFCUp$ensgene[1:4],
+    normalized = "tpm",
+    gene2symbol = gene2symbol(bcb),
+    interestingGroups = "category")
+```
+
+
+```{r footer, child="_footer.Rmd"}
 ```
