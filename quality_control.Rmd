@@ -4,27 +4,27 @@ author: "`r getOption('author')`"
 date: "`r Sys.Date()`"
 bibliography: bibliography.bib
 params:
-    bcbFile: "data/2018-02-02/bcb.rda"
-    outputDir: "."
+    bcb_file: "data/2018-02-02/bcb.rda"
+    output_dir: "."
 ---
 
 ```{r setup, message=FALSE}
-# Last modified 2018-02-08
+# Last modified 2018-02-14
 bcbioRNASeq::prepareRNASeqTemplate()
-source("setup.R")
+source("_setup.R")
 
 # Directory paths
-dataDir <- file.path(params$outputDir, "data", Sys.Date())
-resultsDir <- file.path(params$outputDir, "results", "counts")
+data_dir <- file.path(params$output_dir, "data", Sys.Date())
+results_dir <- file.path(params$output_dir, "results", "counts")
 invisible(mapply(
     FUN = dir.create,
-    list(dataDir, resultsDir),
+    list(data_dir, results_dir),
     MoreArgs = list(recursive = TRUE, showWarnings = FALSE)
 ))
 
 # Load bcbioRNASeq object
-bcbName <- load(params$bcbFile)
-bcb <- get(bcbName, inherits = FALSE)
+bcb_name <- load(params$bcb_file)
+bcb <- get(bcb_name, inherits = FALSE)
 ```
 
 ```{r header, child="_header.Rmd"}
@@ -45,21 +45,49 @@ sampleMetadata(bcb)
 We aligned the reads using the GRCh37/hg19 genome annotations from [Ensembl][].
 
 ```{r counts}
-rawCounts <- counts(bcb, normalized = FALSE)
-normalizedCounts <- counts(bcb, normalized = TRUE)
+raw_counts <- counts(bcb, normalized = FALSE)
+normalized_counts <- counts(bcb, normalized = TRUE)
 tpm <- counts(bcb, normalized = "tpm")
-saveData(rawCounts, normalizedCounts, tpm, dir = dataDir)
-writeCounts(rawCounts, normalizedCounts, tpm, dir = resultsDir)
+saveData(raw_counts, normalized_counts, tpm, dir = data_dir)
+writeCounts(raw_counts, normalized_counts, tpm, dir = results_dir)
 ```
 
 
+## Copy files to Dropbox
+
+We're provisioning the files on Dropbox for the HSCI Stem Cell Commons.
+
+```{r copy_to_dropbox, message=TRUE}
+dropbox_counts_list <- copyToDropbox(
+    c(
+        raw_counts = file.path(results_dir, "raw_counts.csv.gz"),
+        normalized_counts = file.path(results_dir, "normalized_counts.csv.gz"),
+        tpm = file.path(results_dir, "tpm.csv.gz")
+    ),
+    dir = basename(getwd())
+)
+saveData(dropbox_counts_list, dir = data_dir)
+```
+
 ## File downloads
 
-[Results directory on Dropbox](https://www.dropbox.com/sh/swr798c19iriesy/AACiitkyfs1CwojgSjedAntda?dl=0).
+- Normalized counts: Use to evaluate individual genes and/or generate plots. These counts are normalized for the variation in sequencing depth across samples.
+- TPM: Transcripts per million, scaled by length and also suitable for plotting.
+- Raw counts: Only use to perform a new differential expression analysis. These counts will vary across samples due to differences in sequencing depth, and have not been normalized. Do not use this file for plotting genes.
 
-- [`normalizedCounts.csv.gz`](https://www.dropbox.com/s/r8grh208rjvqzyr/normalizedCounts.csv.gz?dl=0): Use to evaluate individual genes and/or generate plots. These counts are normalized for the variation in sequencing depth across samples.
-- [`tpm.csv.gz`](https://www.dropbox.com/s/mftgow5gbqnj9fa/rawCounts.csv.gz?dl=0): Transcripts per million, scaled by length and also suitable for plotting.
-- [`rawCounts.csv.gz`](https://www.dropbox.com/s/q6u3zhvz8apb7qr/tpm.csv.gz?dl=0): Only use to perform a new differential expression analysis. These counts will vary across samples due to differences in sequencing depth, and have not been normalized. Do not use this file for plotting genes.
+```{r file_downloads}
+file_downloads <- vapply(
+    X = dropbox_counts_list,
+    FUN = function(x) {
+        url <- x[["url"]]
+        url <- gsub("\\?dl=0$", "", url)
+        name <- x[["name"]]
+        paste0("`", name, "`: ", url)
+    },
+    FUN.VALUE = character(1L)
+)
+markdownList(file_downloads)
+```
 
 
 
@@ -73,10 +101,10 @@ I've tabbed corresponding plots that demonstrate the batch effects by `date` and
 ## Total reads {.tabset}
 
 ```{r plot_total_reads}
-mdHeader("date", level = 3)
+markdownHeader("date", level = 3)
 plotTotalReads(bcb, interestingGroups = "date")
 
-mdHeader("replicate", level = 3)
+markdownHeader("replicate", level = 3)
 plotTotalReads(bcb, interestingGroups = "replicate")
 ```
 
@@ -86,10 +114,10 @@ plotTotalReads(bcb, interestingGroups = "replicate")
 The number of mapped reads should correspond to the number of total reads.
 
 ```{r plot_mapped_reads}
-mdHeader("date", level = 3)
+markdownHeader("date", level = 3)
 plotMappedReads(bcb, interestingGroups = "date")
 
-mdHeader("replicate", level = 3)
+markdownHeader("replicate", level = 3)
 plotMappedReads(bcb, interestingGroups = "replicate")
 ```
 
@@ -106,10 +134,10 @@ plotMappingRate(bcb)
 ## Number of genes detected {.tabset}
 
 ```{r plot_genes_detected}
-mdHeader("date", level = 3)
+markdownHeader("date", level = 3)
 plotGenesDetected(bcb, interestingGroups = "date")
 
-mdHeader("replicate", level = 3)
+markdownHeader("replicate", level = 3)
 plotGenesDetected(bcb, interestingGroups = "replicate")
 ```
 
@@ -119,13 +147,13 @@ plotGenesDetected(bcb, interestingGroups = "replicate")
 We should observe a linear trend in the number of genes detected with the number of mapped reads, which indicates that the sample input was not overloaded.
 
 ```{r plot_gene_saturation}
-mdHeader("date", level = 3)
+markdownHeader("date", level = 3)
 plotGeneSaturation(bcb, interestingGroups = "date")
 
-mdHeader("replicate", level = 3)
+markdownHeader("replicate", level = 3)
 plotGeneSaturation(bcb, interestingGroups = "replicate")
 
-mdHeader("sampleName", level = 3)
+markdownHeader("sampleName", level = 3)
 plotGeneSaturation(bcb, interestingGroups = "sampleName")
 ```
 
@@ -135,10 +163,10 @@ plotGeneSaturation(bcb, interestingGroups = "sampleName")
 Ideally, at least 60% of total reads should map to exons.
 
 ```{r plot_exonic_mapping_rate}
-mdHeader("date", level = 3)
+markdownHeader("date", level = 3)
 plotExonicMappingRate(bcb, interestingGroups = "date")
 
-mdHeader("replicate", level = 3)
+markdownHeader("replicate", level = 3)
 plotExonicMappingRate(bcb, interestingGroups = "replicate")
 ```
 
@@ -148,10 +176,10 @@ plotExonicMappingRate(bcb, interestingGroups = "replicate")
 The majority of reads should map to exons and not introns.
 
 ```{r plot_intronic_mapping_rate}
-mdHeader("date", level = 3)
+markdownHeader("date", level = 3)
 plotIntronicMappingRate(bcb, interestingGroups = "date")
 
-mdHeader("replicate", level = 3)
+markdownHeader("replicate", level = 3)
 plotIntronicMappingRate(bcb, interestingGroups = "replicate")
 ```
 
@@ -177,10 +205,10 @@ plot53Bias(bcb)
 Generally, we expect similar count spreads for all genes between samples unless the library sizes or total RNA expression are different. The log10 TMM-normalized counts per gene normalization method [@Robinson:2010dd] equates the overall expression levels of genes between samples under the assumption that the majority of them are not differentially expressed. Therefore, by normalizing for total RNA expression by sample, we expect the spread of the log10 TMM-normalized counts per gene to be similar for every sample.
 
 ```{r plot_counts_per_gene}
-mdHeader("date", level = 3)
+markdownHeader("date", level = 3)
 plotCountsPerGene(bcb, interestingGroups = "date")
 
-mdHeader("replicate", level = 3)
+markdownHeader("replicate", level = 3)
 plotCountsPerGene(bcb, interestingGroups = "replicate")
 ```
 
@@ -190,10 +218,10 @@ plotCountsPerGene(bcb, interestingGroups = "replicate")
 Generally, we expect similar count spreads for all genes between samples unless the total expressed RNA per sample is different.
 
 ```{r plot_count_density}
-mdHeader("date", level = 3)
+markdownHeader("date", level = 3)
 plotCountDensity(bcb, interestingGroups = "date")
 
-mdHeader("replicate", level = 3)
+markdownHeader("replicate", level = 3)
 plotCountDensity(bcb, interestingGroups = "replicate")
 ```
 
@@ -235,13 +263,13 @@ PCA [@Jolliffe:2002wx] is a multivariate technique that allows us to summarize t
 **We're seeing a very large batch effect due to the date of sample preparation.** As you can see, the samples are not clustering tightly by treatment, but instead are clustering by the date. We need to attempt to regress this effect out from our model for differential expression analysis. This may be difficult because we're seeing such a large batch effect here.
 
 ```{r plot_pca}
-mdHeader("date", level = 3)
+markdownHeader("date", level = 3)
 plotPCA(bcb, interestingGroups = "date")
 
-mdHeader("replicate", level = 3)
+markdownHeader("replicate", level = 3)
 plotPCA(bcb, interestingGroups = "replicate")
 
-mdHeader("treatment (labeled)", level = 3)
+markdownHeader("treatment (labeled)", level = 3)
 plotPCA(bcb, interestingGroups = c("category", "treatment"), label = TRUE)
 ```
 
