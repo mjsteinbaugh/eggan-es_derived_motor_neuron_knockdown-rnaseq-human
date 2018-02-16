@@ -4,41 +4,41 @@ author: "`r getOption('author')`"
 date: "`r Sys.Date()`"
 bibliography: bibliography.bib
 params:
-    bcbFile: "data/2018-02-02/bcb.rda"
+    bcb_file: "data/2018-02-02/bcb.rda"
     design: !r formula(~date + category)
     contrast: !r c("category", "ALS", "control")
     alpha: 0.05
     lfc: 0
-    outputDir: "."
-    dropboxDir: "Consults/eggan-es_derived_motor_neuron_knockdown-rnaseq-human"
+    output_dir: "."
+    dropbox_dir: !r basename(getwd())
 ---
 
 ```{r setup, message=FALSE}
-# Last modified 2018-02-08
+# Last modified 2018-02-12
 bcbioRNASeq::prepareRNASeqTemplate()
-source("setup.R")
+source("_setup.R")
 
 # Directory paths
-dataDir <- file.path(params$outputDir, "data", Sys.Date())
-resultsDir <- file.path(params$outputDir, "results", "differential_expression")
+data_dir <- file.path(params$output_dir, "data", Sys.Date())
+results_dir <- file.path(params$output_dir, "results", "differential_expression")
 invisible(mapply(
     FUN = dir.create,
-    list(dataDir, resultsDir),
+    list(data_dir, results_dir),
     MoreArgs = list(recursive = TRUE, showWarnings = FALSE)
 ))
 
 # Dropbox paths
-if (is.character(params$dropboxDir)) {
+if (is.character(params$dropbox_dir)) {
     # Delete `.httr-oauth` if you have trouble writing to Dropbox
-    dropboxDir <- file.path(
-        params$dropboxDir,
+    dropbox_dir <- file.path(
+        params$dropbox_dir,
         "results",
         "differential_expression")
 }
 
 # Load bcbioRNASeq object
-bcbName <- load(params$bcbFile)
-bcb <- get(bcbName, inherits = FALSE)
+bcb_name <- load(params$bcb_file)
+bcb <- get(bcb_name, inherits = FALSE)
 ```
 
 ```{r header, child="_header.Rmd"}
@@ -55,22 +55,24 @@ dds <- bcbio(bcb, "DESeqDataSet")
 dim(dds)
 
 # Drop the `NoTx_*` samples from the analysis
-keepSamples <- colnames(dds)[which(!is.na(dds$treatment))]
-keepSamples
+keep_samples <- colnames(dds)[which(!is.na(dds$treatment))]
+keep_samples
 
-dds <- selectSamples(dds, sampleID = keepSamples)
+dds <- selectSamples(dds, sampleID = keep_samples)
 dim(dds)
 
 # Now set the design formula and run DESeq
 design(dds) <- params$design
 dds <- DESeq(dds)
 rld <- rlog(dds)
+```
 
-# Rewrite the normalized counts
-normalizedCounts <- counts(dds, normalized = TRUE)
-writeCounts(normalizedCounts, dir = file.path("results", "counts"))
+Since the dimensions of the dataset have changed, we need to resave the normalized counts.
 
-saveData(dds, normalizedCounts, rld, dir = dataDir)
+```{r resave_normalized_counts}
+normalized_counts <- counts(dds, normalized = TRUE)
+writeCounts(normalized_counts, dir = file.path("results", "counts"))
+saveData(dds, normalized_counts, rld, dir = data_dir)
 ```
 
 
@@ -93,21 +95,21 @@ alphaSummary(dds)
 #   1. Design matrix factor of interest.
 #   2. Numerator for LFC (expt).
 #   3. Denominator for LFC (control).
-resUnshrunken <- results(
+res_unshrunken <- results(
     dds,
     contrast = params$contrast,
     alpha = params$alpha)
 
 # DESeqResults with shrunken log2 fold changes (LFC)
 # help("lfcShrink", "DESeq2")
-resShrunken <- lfcShrink(
+res_shrunken <- lfcShrink(
     dds = dds,
     contrast = params$contrast,
-    res = resUnshrunken)
+    res = res_unshrunken)
 
 # Use shrunken LFC values by default
-res <- resShrunken
-saveData(res, resShrunken, resUnshrunken, dir = dataDir)
+res <- res_shrunken
+saveData(res, res_shrunken, res_unshrunken, dir = data_dir)
 ```
 
 We performed the analysis using a BH adjusted *P* value cutoff of `r params$alpha` and a log fold-change (LFC) ratio cutoff of `r params$lfc`.
@@ -122,10 +124,10 @@ An MA plot compares transformed counts on `M` (log ratio) and `A` (mean average)
 
 ```{r plot_ma}
 mdHeader("shrunken", level = 3)
-plotMA(resShrunken)
+plotMA(res_shrunken)
 
 mdHeader("unshrunken", level = 3)
-plotMA(resUnshrunken)
+plotMA(res_unshrunken)
 ```
 
 
@@ -145,16 +147,16 @@ plotVolcano(
 
 ```{r plot_volcano_additional}
 mdHeader("shrunken", level = 3)
-plotVolcano(resShrunken, padj = TRUE)
+plotVolcano(res_shrunken, padj = TRUE)
 
 mdHeader("shrunken:unadjusted", level = 3)
-plotVolcano(resShrunken, padj = FALSE)
+plotVolcano(res_shrunken, padj = FALSE)
 
 mdHeader("unshrunken", level = 3)
-plotVolcano(resUnshrunken, padj = TRUE)
+plotVolcano(res_unshrunken, padj = TRUE)
 
 mdHeader("unshrunken:unadjusted", level = 3)
-plotVolcano(resUnshrunken, padj = FALSE)
+plotVolcano(res_unshrunken, padj = FALSE)
 ```
 
 
@@ -163,14 +165,14 @@ plotVolcano(resUnshrunken, padj = FALSE)
 This plot shows only differentially expressed genes on a per-sample basis. We have scaled the data by row and used the `ward.D2` method for clustering [@WardJr:1963eu].
 
 ```{r plot_deg_heatmap}
-annotationCol <- colData(dds) %>%
+annotation_col <- colData(dds) %>%
     .[, c("category", "treatment", "date"), drop = FALSE] %>%
     as.data.frame()
 plotDEGHeatmap(
     res,
     counts = rld,
     gene2symbol = gene2symbol(bcb),
-    annotationCol = annotationCol)
+    annotationCol = annotation_col)
 ```
 
 
@@ -203,9 +205,9 @@ resTbl <- resultsTables(
     summary = TRUE,
     headerLevel = 2,
     write = TRUE,
-    dir = resultsDir,
-    dropboxDir = dropboxDir)
-saveData(resTbl, dir = dataDir)
+    dir = results_dir,
+    dropboxDir = dropbox_dir)
+saveData(resTbl, dir = data_dir)
 ```
 
 DEG tables are sorted by BH-adjusted P value, and contain the following columns:
