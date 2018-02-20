@@ -4,7 +4,7 @@ author: "`r getOption('author')`"
 date: "`r Sys.Date()`"
 bibliography: bibliography.bib
 params:
-    bcb_file: "data/2018-02-02/bcb.rda"
+    bcb_file: "data/2018-02-20/bcb.rda"
     design: !r formula(~date + category)
     contrast: !r c("category", "ALS", "control")
     alpha: 0.05
@@ -14,7 +14,7 @@ params:
 ---
 
 ```{r setup, message=FALSE}
-# Last modified 2018-02-12
+# Last modified 2018-02-20
 bcbioRNASeq::prepareRNASeqTemplate()
 source("_setup.R")
 
@@ -27,18 +27,11 @@ invisible(mapply(
     MoreArgs = list(recursive = TRUE, showWarnings = FALSE)
 ))
 
-# Dropbox paths
-if (is.character(params$dropbox_dir)) {
-    # Delete `.httr-oauth` if you have trouble writing to Dropbox
-    dropbox_dir <- file.path(
-        params$dropbox_dir,
-        "results",
-        "differential_expression")
-}
-
 # Load bcbioRNASeq object
 bcb_name <- load(params$bcb_file)
 bcb <- get(bcb_name, inherits = FALSE)
+stopifnot(is(bcb, "bcbioRNASeq"))
+invisible(validObject(bcb))
 ```
 
 ```{r header, child="_header.Rmd"}
@@ -46,7 +39,7 @@ bcb <- get(bcb_name, inherits = FALSE)
 
 
 
-For the differential expression analysis, we used [DESeq2][] `r packageVersion("DESeq2")`. We employed a design formula (`r params$design`) that accounts for the date batch effect. For more information on design formulas in [DESeq2][], run `help("design", "DESeq2")` in [R][].
+For the differential expression analysis, we used [DESeq2][] `r packageVersion("DESeq2")`. We employed a design formula (`r paste(params$design, collapse = "")`) that accounts for the date batch effect. For more information on design formulas in [DESeq2][], run `help("design", "DESeq2")` in [R][].
 
 Here we're discarding the NoTx samples from the analysis. Note that since these 3 samples have been dropped, the values of the normalized counts will change, since we're now only looking at 15 samples. I've uploaded these updated counts into the `results/` directory.
 
@@ -60,6 +53,7 @@ keep_samples
 
 dds <- selectSamples(dds, sampleID = keep_samples)
 dim(dds)
+colnames(dds)
 
 # Now set the design formula and run DESeq
 design(dds) <- params$design
@@ -73,6 +67,13 @@ Since the dimensions of the dataset have changed, we need to resave the normaliz
 normalized_counts <- counts(dds, normalized = TRUE)
 writeCounts(normalized_counts, dir = file.path("results", "counts"))
 saveData(dds, normalized_counts, rld, dir = data_dir)
+```
+
+```{r dropbox_resave, message=TRUE}
+dropbox_normalized_counts_resave <- copyToDropbox(
+    c(normalized_counts = file.path("results", "counts", "normalized_counts.csv.gz")),
+    dir = params$dropbox_dir)
+saveData(dropbox_normalized_counts_resave, dir = data_dir)
 ```
 
 
@@ -118,15 +119,18 @@ We performed the analysis using a BH adjusted *P* value cutoff of `r params$alph
 
 # Plots
 
+We're seeing a small but consistent effect size. Based on these results, I don't recommend applying a log fold change cutoff to our list of differentially expressed genes.
+
+
 ## Mean average (MA) {.tabset}
 
 An MA plot compares transformed counts on `M` (log ratio) and `A` (mean average) scales [@Yang:2002ty].
 
 ```{r plot_ma}
-mdHeader("shrunken", level = 3)
+markdownHeader("shrunken", level = 3)
 plotMA(res_shrunken)
 
-mdHeader("unshrunken", level = 3)
+markdownHeader("unshrunken", level = 3)
 plotMA(res_unshrunken)
 ```
 
@@ -136,26 +140,20 @@ plotMA(res_unshrunken)
 A volcano plot compares significance (BH-adjusted *P* value) against fold change (log2) [@Cui:2003kh; @Li:2014fv]. Genes in the green box with text labels have an adjusted *P* value are likely to be the top candidate genes of interest.
 
 ```{r plot_volcano}
-mdHeader("labeled", level = 3)
+markdownHeader("labeled", level = 3)
 plotVolcano(
     res,
     lfc = params$lfc,
     gene2symbol = gene2symbol(bcb),
     ntop = 20,
-    histograms = FALSE)
+    histograms = TRUE)
 ```
 
-```{r plot_volcano_additional}
-mdHeader("shrunken", level = 3)
+```{r plot_volcano_additional, include=FALSE}
 plotVolcano(res_shrunken, padj = TRUE)
-
-mdHeader("shrunken:unadjusted", level = 3)
 plotVolcano(res_shrunken, padj = FALSE)
 
-mdHeader("unshrunken", level = 3)
 plotVolcano(res_unshrunken, padj = TRUE)
-
-mdHeader("unshrunken:unadjusted", level = 3)
 plotVolcano(res_unshrunken, padj = FALSE)
 ```
 
@@ -165,6 +163,7 @@ plotVolcano(res_unshrunken, padj = FALSE)
 This plot shows only differentially expressed genes on a per-sample basis. We have scaled the data by row and used the `ward.D2` method for clustering [@WardJr:1963eu].
 
 ```{r plot_deg_heatmap}
+# help("pheatmap", "pheatmap")
 annotation_col <- colData(dds) %>%
     .[, c("category", "treatment", "date"), drop = FALSE] %>%
     as.data.frame()
@@ -172,25 +171,24 @@ plotDEGHeatmap(
     res,
     counts = rld,
     gene2symbol = gene2symbol(bcb),
-    annotationCol = annotation_col)
+    annotationCol = annotation_col,
+    clustering_method = "ward.D2")
 ```
 
 
-# PCA plot {.tabset}
+# DEG PCA plots {.tabset}
+
+Now performing PCA using only our list of DEGs, we can see the samples are separating by treatment on PC1, which is good to see. The samples are separating on PC2 by date (batch), but that's okay because we've taken that into account in our DESeq model for performing the differential expression. This looks good.
 
 ```{r plot_deg_pca}
-mdHeader("category", level = 2)
-plotDEGenePCA(
-    res,
-    counts = rld,
-    interestingGroups = "category")
+markdownHeader("category", level = 2)
+plotDEGPCA(res, counts = rld, interestingGroups = "category")
 
-mdHeader("category:date", level = 2)
-plotDEGenePCA(
-    res,
-    counts = rld,
-    interestingGroups = c("category", "date"),
-    label = TRUE)
+markdownHeader("date", level = 2)
+plotDEGPCA(res, counts = rld, interestingGroups = "date")
+
+markdownHeader("category:date", level = 2)
+plotDEGPCA(res, counts = rld, interestingGroups = c("category", "date"), label = TRUE)
 ```
 
 
@@ -206,7 +204,7 @@ resTbl <- resultsTables(
     headerLevel = 2,
     write = TRUE,
     dir = results_dir,
-    dropboxDir = dropbox_dir)
+    dropboxDir = params$dropbox_dir)
 saveData(resTbl, dir = data_dir)
 ```
 
@@ -232,23 +230,6 @@ Only the top up- and down-regulated genes (arranged by log2 fold change) are sho
 topTables(resTbl)
 ```
 
-
-
-# Gene plots
-
-```{r deg_plot}
-# These plots are sorted by gene ID and show DEGs in both directions
-degPlot(dds, res = res, n = 9, xs = "category")
-```
-
-```{r plot_gene}
-plotGene(
-    bcb,
-    genes = resTbl$degLFCUp$ensgene[1:4],
-    normalized = "tpm",
-    gene2symbol = gene2symbol(bcb),
-    interestingGroups = "category")
-```
 
 
 ```{r footer, child="_footer.Rmd"}

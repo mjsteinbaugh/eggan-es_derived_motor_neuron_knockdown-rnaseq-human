@@ -4,12 +4,13 @@ author: "`r getOption('author')`"
 date: "`r Sys.Date()`"
 bibliography: bibliography.bib
 params:
-    bcb_file: "data/2018-02-02/bcb.rda"
+    bcb_file: "data/2018-02-20/bcb.rda"
     output_dir: "."
+    dropbox_dir: !r basename(getwd())
 ---
 
 ```{r setup, message=FALSE}
-# Last modified 2018-02-14
+# Last modified 2018-02-20
 bcbioRNASeq::prepareRNASeqTemplate()
 source("_setup.R")
 
@@ -25,6 +26,8 @@ invisible(mapply(
 # Load bcbioRNASeq object
 bcb_name <- load(params$bcb_file)
 bcb <- get(bcb_name, inherits = FALSE)
+stopifnot(is(bcb, "bcbioRNASeq"))
+invisible(validObject(bcb))
 ```
 
 ```{r header, child="_header.Rmd"}
@@ -64,7 +67,7 @@ dropbox_counts_list <- copyToDropbox(
         normalized_counts = file.path(results_dir, "normalized_counts.csv.gz"),
         tpm = file.path(results_dir, "tpm.csv.gz")
     ),
-    dir = basename(getwd())
+    dir = params$dropbox_dir
 )
 saveData(dropbox_counts_list, dir = data_dir)
 ```

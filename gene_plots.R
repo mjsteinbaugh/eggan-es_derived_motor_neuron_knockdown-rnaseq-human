@@ -24,3 +24,5 @@ plotGene(bcb, genes = c("TARDBP" = "ENSG00000120948"))
 plotGene(bcb, genes = upregulated)
 plotGene(bcb, genes = downregulated)
 dev.off()
+
+# Use the rlog counts for gene plots
