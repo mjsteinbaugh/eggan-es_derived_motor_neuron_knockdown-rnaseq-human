@@ -7,5 +7,7 @@ genes <- c(
     STMN2 = "ENSG00000104435"
 )
 
+pdf("labeled_volcano_and_ma_plots.pdf", width = 8, height = 8)
 plotMA(res, genes = genes, gene2symbol = gene2symbol)
 plotVolcano(res, alpha = 0, lfc = 0, genes = genes, gene2symbol = gene2symbol, histograms = FALSE)
+dev.off()
