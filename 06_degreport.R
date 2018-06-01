@@ -1,4 +1,3 @@
-# https://bioconductor.org/packages/release/bioc/vignettes/DEGreport/inst/doc/DEGreport.pdf
 library(bcbioRNASeq)
 load("data/2018-02-02/bcb.rda")
 load("data/2018-02-09/dds.rda")
