@@ -18,7 +18,6 @@ Contact [Michael Steinbaugh][] for additional information.
 - `05_labeled_volcano_and_ma_plots.R`: [R][] code used to generate draft versions of volcano and MA plots.
 - `06_degreport.R`: [R][] code used to run additional quality control with [DEGreport][] package.
 - `metadata.csv`: Sample metadata.
-- Cell_deconvolution.Rmd - Rmarkdown code for cell signature analysis report
 
 
 
