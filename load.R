@@ -1,3 +1,4 @@
+# v0.1.6
 library(bcbioRNASeq)
 bcb <- loadRNASeq(
     uploadDir = file.path("illumina_rnaseq", "final"),
