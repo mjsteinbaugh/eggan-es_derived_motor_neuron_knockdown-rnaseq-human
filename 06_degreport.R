@@ -18,7 +18,6 @@ resCov <- degCovariates(
     metadata = colData(dds))
 cor <- degCorCov(colData(dds))
 
-# FIXME Need to add `dir.create()` call to DEGreport
 dir.create("degreport", showWarnings = FALSE)
 createReport(
     g = colData(dds)[["category"]],
@@ -36,7 +35,6 @@ rowData(dds) <- cbind(
 degPlot(
     dds,
     res = res,
-    # FIXME This seems to be broken in GitHub version of DEGreport
     ann = "symbol",
     n = 9,
     xs = "category",
