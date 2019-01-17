@@ -1,12 +1,10 @@
 # ALS implicated protein TDP-43 sustains levels of STMN2, a mediator of motor neuron growth and repair
 
-Joseph R. Klim, et al. (2018)
-
 Code for analysis of [bcbio][] processed RNA-seq data using the [bcbioRNASeq][] [R][] package.
 
 Contact [Michael Steinbaugh][] for additional information.
 
-
+Citation: Klim JR, Williams LA, Limone F, Guerra San Juan I, Davis-Dusenbery BN, Mordes DA, Burberry A, Steinbaugh MJ, Gamage KK, Kirchner R, Moccia R, Cassel SH, Chen K, Wainger BJ, Woolf CJ, Eggan K. (2019). [ALS-implicated protein TDP-43 sustains levels of STMN2, a mediator of motor neuron growth and repair.](https://dx.doi.org/10.1038/s41593-018-0300-4) *Nat Neurosci*.
 
 ## Analysis scripts
 
@@ -19,14 +17,10 @@ Contact [Michael Steinbaugh][] for additional information.
 - `06_degreport.R`: [R][] code used to run additional quality control with [DEGreport][] package.
 - `metadata.csv`: Sample metadata.
 
-
-
 ## Additional
 
 - `bcbio_config`: Files used to configure [bcbio][] run.
 - `bcbio_info`: [bcbio][] logs and data versions.
-
-
 
 [bcbio]: http://bcbio-nextgen.readthedocs.io
 [bcbioRNASeq]: http://bioinformatics.sph.harvard.edu/bcbioRNASeq
